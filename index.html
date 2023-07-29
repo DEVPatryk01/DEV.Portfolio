@@ -68,7 +68,7 @@
 					<div class="row">
 						<!-- 1 -->
 						<article class="col-6 col-12-xsmall work-item">
-							<a href="images/thumbs/01.jpg" class="image fit thumb" onclick="openFile('images/kod01.txt')">
+							<a href="#" class="image fit thumb" onclick="openFile('images/kod01.txt'); return false;">
 							<img src="images/thumbs/01.jpg" alt="" />
 							</a>
 							<h3>Mechanizm odpowiedzialny za aktualizację ceny towarów</h3>
@@ -116,7 +116,10 @@
 						</article>
 						<script>
 							function openFile(filePath) {
-								window.open(filePath, '_blank');
+								const link = document.createElement('a');
+								link.href = filePath;
+								link.target = '_blank';
+								link.click();
 							}
 						</script>
 						
