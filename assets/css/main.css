@@ -2210,6 +2210,57 @@ input, select, textarea {
 				height: auto; /* Dodajemy "height: auto;" aby zachować proporcje obrazka */
 			}
 		
+			
+				.row {
+					display: flex;
+					flex-wrap: wrap;
+					justify-content: space-between;
+				}
+			
+				.col-4 {
+					flex-basis: calc(33.33% - 20px); /* Aby zmieścić 3 kolumny obok siebie, musimy podzielić szerokość przez 3 */
+					margin-bottom: 20px;
+				}
+			
+				/* Styl dla ikony */
+				.labeled-icons li {
+					display: flex;
+					align-items: center;
+					margin-bottom: 1rem;
+				}
+			
+				.labeled-icons li h3.icon {
+					margin-right: 10px;
+				}
+			
+				/* Dostosowanie rozmiaru ikon */
+				.labeled-icons li h3.icon i {
+					font-size: 24px;
+				}
+			
+				/* Styl dla etykiety (label) */
+				.labeled-icons li .label {
+					font-size: 14px;
+				}
+			
+				/* Dostosowanie wyśrodkowania tekstów wewnątrz kolumny */
+				.col-4 p {
+					margin: 0;
+				}
+			
+				/* Dostosowanie rozmiaru adresu e-mail */
+				.col-4 a {
+					font-size: 14px;
+				}
+			
+				/* Dla ekranów o mniejszej szerokości zmieniamy flex-basis, aby kolumny wyświetlały się jedna pod drugą */
+				@media (max-width: 768px) {
+					.col-4 {
+						flex-basis: 100%;
+					}
+				}
+			
+			
 
 /* List */
 
