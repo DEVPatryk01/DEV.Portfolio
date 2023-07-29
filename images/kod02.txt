@@ -1,0 +1,200 @@
+USE [CDNXL_Planidis]
+
+GO
+
+/****** Object:  StoredProcedure [CDN].[ITA_B2B_DaneTowarowGrupDoXml]    Script Date: 2023-04-05 09:28:15 ******/
+SET ANSI_NULLS ON
+
+GO
+
+SET QUOTED_IDENTIFIER ON
+
+GO
+
+/*
+-- =================================================================================================================================================================--
+--		Autor:		Patryk Kamiński																																	--
+--		Aplication:		ITA.PLN.HydraProductsXml, B2B																												--
+--		Create Date:		05-04-2023                  																											--
+--		Description:		Procedura zwraca listę towarów w obrębie grupy wskazanej przez użytkownika. Iteracje po grupach zagnieżdżonych obsłużone w kodzie C#.   --
+-- =================================================================================================================================================================--
+*/
+
+ALTER procedure [CDN].[ITA_B2B_DaneTowarowGrupDoXml] @idGrupy int, @kntAkronim nvarchar(50) = ''
+
+AS
+
+BEGIN
+
+--Jeśli istnieje atrybut B2B XML Rabat na kontrahencie z wartością 'NIE' to przypisuje takiemu samemu parametrowi wartość 1  jeśli nie to 0
+
+	declare @kntgidnumer int						SELECT @kntgidnumer=knt_GIDNumer FROM CDN.KntKarty WHERE knt_akronim=@kntAkronim
+	DECLARE @B2BRabat int
+
+	IF EXISTS (SELECT * FROM CDN.Atrybuty Where Atr_ObiNumer = @kntgidnumer and Atr_AtkId = 145 and Atr_ObiTyp = 32 and Atr_Wartosc='NIE')
+	
+			BEGIN
+				
+				SET @B2BRabat= 1
+					
+			END
+			ELSE 
+				
+				SET @B2BRabat = 0
+
+	declare @rabat decimal(5,2) = 0
+			
+	select @rabat=isnull(knt_rabat,0)  
+	from cdn.kntkarty
+	where knt_akronim=@kntAkronim
+
+	IF @B2BRabat = 1
+	
+			BEGIN
+			
+				SET @rabat = 1
+				
+			END
+			ELSE 
+			
+				SET @rabat = (100 - @rabat)/100
+			
+				 
+	declare @idCeny int = (select tcn_id from cdn.TwrCenyNag where tcn_nazwa = 'W_HURT - AKTUALNY')--'W_HURT')
+	declare @idMagazynu int = (select mag_gidnumer from cdn.Magazyny where MAG_Kod = 'BMG')
+	declare @rodzajId int = (select slw_id from cdn.slowniki where SLW_Kategoria = 'Rodzaje towarów' and SLW_WartoscS = 'Na zamówienie')
+
+	declare @dane table
+	
+			(Ean varchar(40),
+			Nazwa varchar(255),
+			Manufacturer varchar(255),
+			Family varchar(255),
+			Subfamily varchar(255),
+			Cena decimal(11,2),
+			Dostepnosc varchar(20),
+			Waga decimal(11,2),
+			WagaBrutto decimal(11,2),
+			OpisSkr varchar(255),
+			OpisPelny varchar(max))
+			
+	declare @B2BStany int
+
+		--Wyjątek dla 1 kontrahenta--
+
+		IF @kntAkronim = 'CZEMPION_DĘBICA'
+		
+			BEGIN
+				
+				SET @idGrupy = 18345 --Nasza Oferta VERSACE-LAGA-KONIE--
+				
+			END
+			ELSE
+				
+				SET @idGrupy = 18170 --Nasza Oferta--
+
+		--Jeśli istnieje atrybut B2B XML Stany na kontrahencie z wybraną wartością 'Faktyczne' to przypisuje takiemu samemu parametrowi wartość 1  jeśli nie to 0
+
+	IF EXISTS (SELECT * FROM CDN.Atrybuty Where Atr_ObiNumer = @kntgidnumer and Atr_AtkId = 146 and Atr_ObiTyp = 32 and Atr_Wartosc='Faktyczne')
+	
+			BEGIN
+				
+				SET @B2BStany = 1
+			
+			END
+			ELSE 
+				
+				SET @B2BStany = 0
+					
+					
+	insert into @dane
+	
+		select 
+		isnull(Twr_Ean,'') as Ean,
+		isnull(Twr_Nazwa,'') as Nazwa,
+		isnull(cdn.adv_grupyTowaruDomyslne(Twr_GIDNumer, 1),''),
+		isnull(cdn.adv_grupyTowaruDomyslne(Twr_GIDNumer, 2), ''),
+		isnull(cdn.adv_grupyTowaruDomyslne(Twr_GIDNumer, 3), ''),
+		round(isnull(twc_wartosc, 0) * @rabat,2) as Cena,
+		
+					CASE 
+					
+						WHEN isnull(Tpm_RodzajId, 0) = @rodzajId THEN 'na zamówienie'
+						WHEN isnull((select sum(twz_ilspr) from cdn.twrzasoby where twz_twrnumer = twr_gidnumer and TwZ_TwrTyp = twr_gidtyp and TwZ_MagNumer = @idMagazynu),0) = 0 
+						THEN 'brak'
+						
+					ELSE CASE
+										
+							WHEN 
+							
+								@B2BStany = 1 and (select sum(twz_ilspr) from cdn.twrzasoby where twz_twrnumer = twr_gidnumer and TwZ_TwrTyp = twr_gidtyp and TwZ_MagNumer = @idMagazynu) > 
+								(SELECT isnull(sum(Rez_Ilosc),0) FROM CDN.Rezerwacje WHERE Rez_TwrTyp = 16 AND Rez_TwrNumer = Twr_GIDNumer AND Rez_GIDTyp = 2576 AND  ((Rez_ZrdTyp = 960 AND Rez_Zrodlo = 9) OR (Rez_Zrodlo = 10 AND Rez_Aktywna = 1)) and Rez_DataWaznosci >= DATEdiff( dd, CONVERT(DATETIME,'18001228',11),GETDATE())) 
+								
+							THEN 
+							
+								CAST((select sum(twz_ilspr) from cdn.twrzasoby where twz_twrnumer = twr_gidnumer and TwZ_TwrTyp = twr_gidtyp and TwZ_MagNumer = @idMagazynu) - 
+								(SELECT isnull(sum(Rez_Ilosc),0) FROM CDN.Rezerwacje WHERE Rez_TwrTyp = 16 AND Rez_TwrNumer = Twr_GIDNumer AND Rez_GIDTyp = 2576 AND  ((Rez_ZrdTyp = 960 AND Rez_Zrodlo = 9) OR (Rez_Zrodlo = 10 AND Rez_Aktywna = 1)) and Rez_DataWaznosci >= DATEdiff( dd, CONVERT(DATETIME,'18001228',11),GETDATE())) AS VARCHAR(30))
+												
+					ELSE CASE 
+															
+							WHEN 
+							
+								(select sum(twz_ilspr) from cdn.twrzasoby where twz_twrnumer = twr_gidnumer and TwZ_TwrTyp = twr_gidtyp and TwZ_MagNumer = @idMagazynu) < (SELECT isnull(sum(Rez_Ilosc),0) FROM CDN.		Rezerwacje WHERE Rez_TwrTyp = 16 AND Rez_TwrNumer = Twr_GIDNumer AND Rez_GIDTyp = 2576 AND  ((Rez_ZrdTyp = 960 AND Rez_Zrodlo = 9) OR (Rez_Zrodlo = 10 AND Rez_Aktywna = 1)) and 		Rez_DataWaznosci >= DATEdiff( dd, CONVERT(DATETIME,'18001228',11),GETDATE())) 
+							
+							THEN 'brak'
+
+							WHEN 
+							
+								(isnull((select sum(twz_ilspr) from cdn.twrzasoby where twz_twrnumer = twr_gidnumer and TwZ_TwrTyp = twr_gidtyp and TwZ_MagNumer = @idMagazynu),0)) > Tpm_IloscMin 
+							
+							THEN 'jest'
+																
+							WHEN 
+							
+								(Tpm_IloscMin>0 and (isnull((select sum(twz_ilspr) from cdn.twrzasoby where twz_twrnumer = twr_gidnumer and TwZ_TwrTyp = twr_gidtyp and TwZ_MagNumer = 25),0)) between Tpm_IloscMin *0.1 and Tpm_IloscMin) 
+							
+							THEN 'jest'
+																
+							WHEN 
+							
+								(Tpm_IloscMin>0 and(isnull((select sum(twz_ilspr) from cdn.twrzasoby where twz_twrnumer = twr_gidnumer and TwZ_TwrTyp = twr_gidtyp and TwZ_MagNumer = 25),0)) between 1.0 and Tpm_IloscMin *0.1) 
+							
+							THEN 'mało'
+							ELSE 'brak'
+							end
+							end 
+							
+		END as Dostepnosc,			
+		round(isnull(Twr_Waga, 0),2) as Waga,
+		round(isnull(Twr_WagaBrutto, 0),2) as WagaBrutto,
+		'' as OpisSkr,
+		isnull(two_opis,'') as OpisPelny
+		from cdn.twrkarty			
+		left join cdn.TwrParMag on Tpm_TwrNumer = Twr_GIDNumer and Tpm_TwrTyp = Twr_GIDTyp and Tpm_MagNumer = @idMagazynu			
+		left join cdn.TwrOpisy on TwO_TwrTyp = twr_gidtyp and TwO_TwrNumer = Twr_GIDNumer
+		left join cdn.TwrCeny on TwC_TwrTyp = twr_gidtyp and TwC_TwrNumer = Twr_GIDNumer and TwC_TcnId = @idCeny
+		where  Twr_Archiwalny = 0 -- bez archiwalnych
+		and Twr_WCenniku = 1 -- oznaczenie pulpitu kontrahenta na karcie twr
+		and ([CDN].[CzyTowarWGrupie](twr_gidnumer, @idGrupy) = 1)
+
+					
+
+		SELECT  
+		Ean as [ean],  
+		Nazwa  AS [name],
+		Manufacturer as [manufacturer],
+		Family as [family],
+		Subfamily as [subfamily],
+		Cena as [price],
+		Dostepnosc as [available],
+		Waga as [weight],
+		WagaBrutto as [grossweight],
+		OpisSkr as [shortdescription],
+		OpisPelny as [fulldescription]
+		FROM @dane 
+		
+		FOR XML PATH ('product'), ROOT('products')
+		
+END
+
+	 

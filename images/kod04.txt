@@ -1,0 +1,118 @@
+USE [ERPXL_CHC]
+GO
+/****** Object:  Trigger [CDN].[ITA_Blokada_ZZ_KONS_SERIA]    Script Date: 2023-07-29 10:37:36 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+--============================================================================================================================================--
+-- Author:	Patryk Kaminski												                                                                      --
+-- Create date:	06.04.2023												                                                                      --
+-- Description: Blokada wystawienia ZZ dla towaru KONSYGNACYJNY na inny magazyn niż KON oraz z inną serią dokumentu niż KONS.                 --
+-- ===========================================================================================================================================--
+
+
+ALTER trigger [CDN].[ITA_Blokada_ZZ_KONS_SERIA]
+on [CDN].[ZamNag]
+for
+insert, update
+
+as   
+
+BEGIN
+
+IF EXISTS (SELECT * FROM inserted i
+			JOIN CDN.ZamNag z ON i.ZaN_GIDTyp=z.ZaN_GIDTyp AND i.ZaN_GIDFirma=z.ZaN_GIDFirma AND i.ZaN_GIDNumer=z.ZaN_GIDNumer
+			where z.ZaN_Aktywny = 0 and z.ZaN_ZamTyp IN (1152, 640))
+			
+			BEGIN
+			
+					IF EXISTS (SELECT * FROM inserted i 
+								JOIN CDN.ZamNag z ON i.ZaN_GIDTyp=z.ZaN_GIDTyp AND i.ZaN_GIDFirma=z.ZaN_GIDFirma AND i.ZaN_GIDNumer=z.ZaN_GIDNumer
+								join cdn.ZamElem e ON e.ZaE_GIDTyp=z.ZaN_GIDTyp AND e.ZaE_GIDNumer=z.ZaN_GIDNumer 
+								join cdn.TwrKarty k on k.Twr_GIDNumer=e.ZaE_TwrNumer
+								where  Twr_RodzajId = 1574 and z.ZaN_ZamSeria <> 'KON' and z.ZaN_MagNumer <> 4 and z.ZaN_Aktywny = 0
+								)
+
+									BEGIN
+			 
+										 RAISERROR
+											
+												 ('#CDN_BLADK/# 
+												 #CDN_1= Zamówienia Towaru Konsygnacyjny wymaga wybrania Magazynu KONS oraz serii KON. /# #CDN_2= CDN.ITA_Blokada_ZZ_KONS_SERIA/#
+												 #CDN_3=/#',16,1)
+
+									END
+
+					IF EXISTS (SELECT * FROM inserted i 
+								JOIN CDN.ZamNag z ON i.ZaN_GIDTyp=z.ZaN_GIDTyp AND i.ZaN_GIDFirma=z.ZaN_GIDFirma AND i.ZaN_GIDNumer=z.ZaN_GIDNumer
+								join cdn.ZamElem e ON e.ZaE_GIDTyp=z.ZaN_GIDTyp AND e.ZaE_GIDNumer=z.ZaN_GIDNumer 
+								join cdn.TwrKarty k on k.Twr_GIDNumer=e.ZaE_TwrNumer
+								where  Twr_RodzajId = 1574 and z.ZaN_MagNumer = 4 and z.ZaN_ZamSeria <> 'KON'
+								)
+
+
+									 BEGIN
+							 
+										 RAISERROR
+											
+												 ('#CDN_BLADK/# 
+												 #CDN_1= Wybierz serię dokumentu KON. /# #CDN_2= CDN.ITA_Blokada_ZZ_KONS_SERIA/#
+												 #CDN_3=/#',16,1)
+												
+										  END
+
+					IF EXISTS (SELECT * FROM inserted i 
+								JOIN CDN.ZamNag z ON i.ZaN_GIDTyp=z.ZaN_GIDTyp AND i.ZaN_GIDFirma=z.ZaN_GIDFirma AND i.ZaN_GIDNumer=z.ZaN_GIDNumer
+								join cdn.ZamElem e ON e.ZaE_GIDTyp=z.ZaN_GIDTyp AND e.ZaE_GIDNumer=z.ZaN_GIDNumer 
+								join cdn.TwrKarty k on k.Twr_GIDNumer=e.ZaE_TwrNumer
+								where  Twr_RodzajId = 1574 and z.ZaN_ZamSeria = 'KON' and z.ZaN_MagNumer <> 4
+								)
+
+
+									 BEGIN
+							 
+										 RAISERROR
+											
+												 ('#CDN_BLADK/# 
+												 #CDN_1= Wybierz magazyn KONS. /# #CDN_2= CDN.ITA_Blokada_ZZ_KONS_SERIA/#
+												 #CDN_3=/#',16,1)
+
+										END
+			END
+END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
